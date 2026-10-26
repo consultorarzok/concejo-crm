@@ -76,37 +76,91 @@ SELECT row_to_json(r) AS data FROM r`,
  UNION ALL
  SELECT 'audiencia', g.id, g.telefono, NULLIF(g.nombre, ''), NULL, g.concejal_o_area || COALESCE(' · ' || g.fecha_solicitada, ''), 'Audiencia: ' || COALESCE(g.tipo, ''), CASE WHEN g.fecha_registro ~ '^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}' THEN g.fecha_registro::timestamp AT TIME ZONE 'America/Argentina/Jujuy' END FROM concejo_agendamientos g)
 SELECT COALESCE(json_agg(t), '[]'::json) AS data FROM (
- SELECT u.tipo, u.id, u.telefono, COALESCE(NULLIF(k.nombre, ''), u.nombre) AS nombre, u.barrio, u.detalle, u.motivo, u.cuando, COALESCE(k.atencion, 'no_atendido') AS atencion, (u.telefono ~ '^549000') AS es_prueba
+ SELECT u.tipo, u.id, u.telefono, COALESCE(NULLIF(k.nombre, ''), u.nombre) AS nombre, u.barrio, u.detalle, u.motivo, u.cuando, COALESCE(k.atencion, 'no_atendido') AS atencion, (u.telefono ~ '^(549000|5493883299927$)') AS es_prueba
  FROM u LEFT JOIN concejo_crm_contactos k ON k.telefono = u.telefono
- WHERE ($4::boolean OR u.telefono !~ '^549000') AND ($1 = '' OR (u.cuando >= $2::timestamptz AND u.cuando < $3::timestamptz)) ORDER BY u.cuando DESC NULLS LAST LIMIT 1000) t`,
+ WHERE ($4::boolean OR u.telefono !~ '^(549000|5493883299927$)') AND ($1 = '' OR (u.cuando >= $2::timestamptz AND u.cuando < $3::timestamptz)) ORDER BY u.cuando DESC NULLS LAST LIMIT 1000) t`,
   buzon: `SELECT COALESCE(json_agg(t), '[]'::json) AS data FROM (
- SELECT p.id, p.fecha, p.telefono, COALESCE(NULLIF(k.nombre, ''), NULLIF(p.nombre, '')) AS nombre, NULLIF(p.barrio, '') AS barrio, p.problema, p.norma_propuesta, p.estado_revision, COALESCE(k.atencion, 'no_atendido') AS atencion, (p.telefono ~ '^549000') AS es_prueba
+ SELECT p.id, p.fecha, p.telefono, COALESCE(NULLIF(k.nombre, ''), NULLIF(p.nombre, '')) AS nombre, NULLIF(p.barrio, '') AS barrio, p.problema, p.norma_propuesta, p.estado_revision, COALESCE(k.atencion, 'no_atendido') AS atencion, (p.telefono ~ '^(549000|5493883299927$)') AS es_prueba
  FROM concejo_propuestas_normativas p LEFT JOIN concejo_crm_contactos k ON k.telefono = p.telefono
- WHERE ($4::boolean OR p.telefono !~ '^549000') AND ($1 = '' OR left(p.fecha, 7) = $1) ORDER BY p.id DESC LIMIT 1000) t`,
+ WHERE ($4::boolean OR p.telefono !~ '^(549000|5493883299927$)') AND ($1 = '' OR left(p.fecha, 7) = $1) ORDER BY p.id DESC LIMIT 1000) t`,
   ords: `SELECT json_build_object(
  'ranking', (SELECT COALESCE(json_agg(r), '[]'::json) FROM (SELECT "Numero_Ordenanza" AS numero, count(*) AS n, count(DISTINCT "Telefono") AS vecinos, max("Fecha") AS ultima FROM concejo_ordenanzas_consultadas
-   WHERE ($3::boolean OR "Telefono" !~ '^549000') AND ($1 = '' OR left("Fecha", 7) = $1) GROUP BY 1 ORDER BY 2 DESC, 4 DESC LIMIT 100) r),
+   WHERE ($3::boolean OR "Telefono" !~ '^(549000|5493883299927$)') AND ($1 = '' OR left("Fecha", 7) = $1) GROUP BY 1 ORDER BY 2 DESC, 4 DESC LIMIT 100) r),
  'recientes', (SELECT COALESCE(json_agg(x), '[]'::json) FROM (SELECT o.id, o."Fecha" AS fecha, o."Telefono" AS telefono, o."Numero_Ordenanza" AS numero, COALESCE(NULLIF(k.nombre, ''), NULLIF(v.nombre, '')) AS nombre
    FROM concejo_ordenanzas_consultadas o LEFT JOIN concejo_crm_contactos k ON k.telefono = o."Telefono" LEFT JOIN concejo_vecinos v ON v.telefono = o."Telefono"
-   WHERE ($3::boolean OR o."Telefono" !~ '^549000') AND ($1 = '' OR left(o."Fecha", 7) = $1) ORDER BY o.id DESC LIMIT 100) x)
+   WHERE ($3::boolean OR o."Telefono" !~ '^(549000|5493883299927$)') AND ($1 = '' OR left(o."Fecha", 7) = $1) ORDER BY o.id DESC LIMIT 100) x)
 ) AS data`,
-  stats: `WITH ts AS (SELECT telefono FROM concejo_conversaciones WHERE created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^549000') GROUP BY telefono),
+  audit: `WITH m AS (SELECT telefono, created_at, mensaje_usuario, respuesta_ai,
+   lower(translate(coalesce(mensaje_usuario, ''), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN')) AS q,
+   lower(translate(coalesce(respuesta_ai, ''), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN')) AS r
+   FROM concejo_conversaciones WHERE tipo_mensaje = 'text' AND ($4::boolean OR telefono !~ '^(549000|5493883299927$)')),
+t AS (SELECT m.*, CASE
+   WHEN q ~ 'buzon|propuest|proponer|tu norma' THEN 'Propuestas / Buzón'
+   WHEN q ~ 'mediaci|conflicto|me amenaz|pelea' THEN 'Mediación'
+   WHEN q ~ 'audiencia|banca abierta|stand' THEN 'Audiencias y participación'
+   WHEN q ~ 'ordenanza|esta permitido|se puede|norma' THEN 'Ordenanzas'
+   WHEN q ~ 'concejal|bloque|presidente|autoridad' THEN 'Concejales y autoridades'
+   WHEN q ~ 'comision' THEN 'Comisiones'
+   WHEN q ~ 'sesion|sesiona' THEN 'Sesiones'
+   WHEN q ~ 'vecinal' THEN 'Centros vecinales'
+   WHEN q ~ 'bache|luminaria|alumbrado|basura|cloaca|residuos' THEN 'Reclamos del Municipio'
+   WHEN q ~ 'colectivo|linea|transporte' THEN 'Colectivos'
+   WHEN q ~ 'horario|direccion|donde queda|donde esta' THEN 'Horarios y ubicación'
+   WHEN length(q) < 25 THEN 'Saludos y mensajes cortos'
+   ELSE 'Otras consultas' END AS tema,
+  CASE
+   WHEN r ~ 'no es una funcion del concejo' THEN 'Aclara que no es función del Concejo'
+   WHEN r ~ 'no tengo (esa )?informacion|no lo tengo cargado|no tengo cargad|no figura' THEN 'Dice que no tiene la información'
+   WHEN r ~ 'apartidario|opiniones politicas' THEN 'Se declara apartidario'
+   WHEN r ~ '911|emergencia' THEN 'Pasa números de emergencia'
+   WHEN r ~ 'mediacion' THEN 'Explica la Mediación'
+   WHEN r ~ 'buzon' THEN 'Ofrece el Buzón «Tu norma, tu ciudad»'
+   WHEN r ~ 'coordinacion general|5042325|wa\\.me' THEN 'Pasa el contacto de Coordinación'
+   WHEN r ~ 'buscador|digesto|ordenanza' THEN 'Orienta sobre ordenanzas / buscadores'
+   WHEN r ~ 'concejal|bloque|comision|presid' THEN 'Informa de concejales o comisiones'
+   WHEN r ~ 'sesion' THEN 'Informa de sesiones'
+   WHEN r ~ 'puedo ayudarte con' THEN 'Saluda y presenta el menú'
+   ELSE 'Otras respuestas' END AS tipo_resp
+  FROM m),
+tp AS (SELECT * FROM t WHERE $1::text IS NOT NULL AND created_at >= $2::timestamptz AND created_at < $3::timestamptz),
+c AS (SELECT "Nombre_Completo" AS n, "Bloque" AS b, lower(translate(substring(trim("Nombre_Completo") from '(\\S+)$'), 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunAEIOUUN')) AS ap FROM concejo_cache_concejales)
+SELECT json_build_object(
+ 'mensajes', (SELECT count(*) FROM tp),
+ 'vecinos', (SELECT count(DISTINCT telefono) FROM tp),
+ 'no_supo', (SELECT count(*) FROM tp WHERE tipo_resp = 'Dice que no tiene la información'),
+ 'temas', (SELECT COALESCE(json_agg(x), '[]'::json) FROM (SELECT tema AS label, count(*) AS n, count(DISTINCT telefono) AS vecinos FROM tp GROUP BY 1 ORDER BY 2 DESC) x),
+ 'respuestas', (SELECT COALESCE(json_agg(x), '[]'::json) FROM (SELECT tipo_resp AS label, count(*) AS n FROM tp GROUP BY 1 ORDER BY 2 DESC) x),
+ 'concejales', (SELECT COALESCE(json_agg(x), '[]'::json) FROM (
+   SELECT c.n AS nombre, c.b AS bloque, count(*) AS n, count(DISTINCT tp.telefono) AS vecinos, (array_agg(left(tp.mensaje_usuario, 140) ORDER BY tp.created_at DESC))[1:3] AS ejemplos
+   FROM c JOIN tp ON tp.q ~ ('\\m' || c.ap || '\\M') GROUP BY 1, 2 ORDER BY 3 DESC, 4 DESC LIMIT 20) x),
+ 'repetidas', (SELECT COALESCE(json_agg(x), '[]'::json) FROM (
+   SELECT (array_agg(left(mensaje_usuario, 140) ORDER BY created_at DESC))[1] AS pregunta, count(*) AS n, count(DISTINCT telefono) AS vecinos, mode() WITHIN GROUP (ORDER BY tipo_resp) AS respuesta
+   FROM tp WHERE length(q) >= 12 GROUP BY regexp_replace(q, '[^a-z0-9 ]', '', 'g') HAVING count(*) >= 2 ORDER BY 2 DESC, 3 DESC LIMIT 15) x),
+ 'sin_respuesta', (SELECT COALESCE(json_agg(x), '[]'::json) FROM (
+   SELECT left(mensaje_usuario, 160) AS pregunta, left(respuesta_ai, 220) AS respuesta, created_at FROM tp WHERE tipo_resp = 'Dice que no tiene la información' ORDER BY created_at DESC LIMIT 12) x),
+ 'meses', (SELECT COALESCE(json_agg(x ORDER BY x.mes), '[]'::json) FROM (
+   SELECT to_char(created_at AT TIME ZONE 'America/Argentina/Jujuy', 'YYYY-MM') AS mes, count(*) AS mensajes, count(DISTINCT telefono) AS vecinos,
+     count(*) FILTER (WHERE tipo_resp = 'Dice que no tiene la información') AS no_supo,
+     count(*) FILTER (WHERE tema = 'Ordenanzas') AS ordenanzas, count(*) FILTER (WHERE tema = 'Concejales y autoridades') AS concejales
+   FROM t GROUP BY 1) x)
+) AS data`,
+  stats: `WITH ts AS (SELECT telefono FROM concejo_conversaciones WHERE created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^(549000|5493883299927$)') GROUP BY telefono),
 a AS (SELECT v.* FROM concejo_crm_v v WHERE ($4::boolean OR NOT v.es_prueba) AND ($1 = '' OR v.telefono IN (SELECT telefono FROM ts)))
 SELECT json_build_object(
  'vecinos', (SELECT count(*) FROM a),
- 'mensajes', (SELECT count(*) FROM concejo_conversaciones WHERE created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^549000')),
- 'derivaciones', (SELECT count(*) FROM concejo_derivaciones WHERE ($4::boolean OR "Telefono" !~ '^549000') AND ($1 = '' OR (created_at >= $2::timestamptz AND created_at < $3::timestamptz))),
- 'mediaciones', (SELECT count(*) FROM concejo_mediaciones WHERE ($4::boolean OR telefono !~ '^549000') AND ($1 = '' OR left(fecha, 7) = $1)),
- 'propuestas', (SELECT count(*) FROM concejo_propuestas_normativas WHERE ($4::boolean OR telefono !~ '^549000') AND ($1 = '' OR left(fecha, 7) = $1)),
- 'ordenanzas', (SELECT count(*) FROM concejo_ordenanzas_consultadas WHERE ($4::boolean OR "Telefono" !~ '^549000') AND ($1 = '' OR left("Fecha", 7) = $1)),
+ 'mensajes', (SELECT count(*) FROM concejo_conversaciones WHERE created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^(549000|5493883299927$)')),
+ 'derivaciones', (SELECT count(*) FROM concejo_derivaciones WHERE ($4::boolean OR "Telefono" !~ '^(549000|5493883299927$)') AND ($1 = '' OR (created_at >= $2::timestamptz AND created_at < $3::timestamptz))),
+ 'mediaciones', (SELECT count(*) FROM concejo_mediaciones WHERE ($4::boolean OR telefono !~ '^(549000|5493883299927$)') AND ($1 = '' OR left(fecha, 7) = $1)),
+ 'propuestas', (SELECT count(*) FROM concejo_propuestas_normativas WHERE ($4::boolean OR telefono !~ '^(549000|5493883299927$)') AND ($1 = '' OR left(fecha, 7) = $1)),
+ 'ordenanzas', (SELECT count(*) FROM concejo_ordenanzas_consultadas WHERE ($4::boolean OR "Telefono" !~ '^(549000|5493883299927$)') AND ($1 = '' OR left("Fecha", 7) = $1)),
  'sin_atender', (SELECT count(*) FROM a WHERE atencion = 'no_atendido' AND (derivs > 0 OR propuestas > 0 OR mediaciones > 0)),
  'atendidos', (SELECT count(*) FROM a WHERE atencion = 'atendido'),
  'pruebas_ocultas', (SELECT count(*) FROM concejo_crm_v WHERE es_prueba),
- 'meses', (SELECT COALESCE(json_agg(m ORDER BY m.mes), '[]'::json) FROM (SELECT to_char(created_at AT TIME ZONE 'America/Argentina/Jujuy', 'YYYY-MM') AS mes, count(*) AS mensajes, count(DISTINCT telefono) AS vecinos FROM concejo_conversaciones WHERE ($4::boolean OR telefono !~ '^549000') GROUP BY 1) m),
- 'diario', (SELECT COALESCE(json_agg(d ORDER BY d.dia), '[]'::json) FROM (SELECT (created_at AT TIME ZONE 'America/Argentina/Jujuy')::date AS dia, count(*) AS mensajes, count(DISTINCT telefono) AS vecinos FROM concejo_conversaciones WHERE $1 <> '' AND created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^549000') GROUP BY 1) d),
- 'horas', (SELECT COALESCE(json_agg(x ORDER BY x.hora), '[]'::json) FROM (SELECT extract(hour FROM created_at AT TIME ZONE 'America/Argentina/Jujuy')::int AS hora, count(*) AS n FROM concejo_conversaciones WHERE created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^549000') GROUP BY 1) x),
+ 'meses', (SELECT COALESCE(json_agg(m ORDER BY m.mes), '[]'::json) FROM (SELECT to_char(created_at AT TIME ZONE 'America/Argentina/Jujuy', 'YYYY-MM') AS mes, count(*) AS mensajes, count(DISTINCT telefono) AS vecinos FROM concejo_conversaciones WHERE ($4::boolean OR telefono !~ '^(549000|5493883299927$)') GROUP BY 1) m),
+ 'diario', (SELECT COALESCE(json_agg(d ORDER BY d.dia), '[]'::json) FROM (SELECT (created_at AT TIME ZONE 'America/Argentina/Jujuy')::date AS dia, count(*) AS mensajes, count(DISTINCT telefono) AS vecinos FROM concejo_conversaciones WHERE $1 <> '' AND created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^(549000|5493883299927$)') GROUP BY 1) d),
+ 'horas', (SELECT COALESCE(json_agg(x ORDER BY x.hora), '[]'::json) FROM (SELECT extract(hour FROM created_at AT TIME ZONE 'America/Argentina/Jujuy')::int AS hora, count(*) AS n FROM concejo_conversaciones WHERE created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^(549000|5493883299927$)') GROUP BY 1) x),
  'temas', (SELECT COALESCE(json_agg(c), '[]'::json) FROM (SELECT tema, count(*) AS n FROM a GROUP BY 1 ORDER BY 2 DESC) c),
- 'tipos', (SELECT COALESCE(json_agg(t), '[]'::json) FROM (SELECT tipo_mensaje AS tipo, count(*) AS n FROM concejo_conversaciones WHERE created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^549000') GROUP BY 1 ORDER BY 2 DESC) t)
+ 'tipos', (SELECT COALESCE(json_agg(t), '[]'::json) FROM (SELECT tipo_mensaje AS tipo, count(*) AS n FROM concejo_conversaciones WHERE created_at >= $2::timestamptz AND created_at < $3::timestamptz AND ($4::boolean OR telefono !~ '^(549000|5493883299927$)') GROUP BY 1 ORDER BY 2 DESC) t)
 ) AS data`,
 };
 const P = '$("Parsear").first().json';
@@ -117,6 +171,7 @@ const REPL = {
   buzon: `={{ [${MD}] }}`,
   ords: `={{ [${P}.p.mes, ${P}.p.desde, ${P}.p.pruebas] }}`,
   stats: `={{ [${MD}] }}`,
+  audit: `={{ [${MD}] }}`,
   detail: `={{ [${P}.p.telefono] }}`,
   save: `={{ [${P}.p.telefono, ${P}.p.nombre, ${P}.p.atencion, ${P}.p.por, ${P}.p.hasNombre, ${P}.p.hasAtencion] }}`,
   note: `={{ [${P}.p.telefono, ${P}.p.por, ${P}.p.texto] }}`,

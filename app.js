@@ -70,6 +70,7 @@ const IC = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4 7 7 0 0 0 20 14.5z"/>',
   wa: '<path d="M21 12a8 8 0 0 1-11.7 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.5-2-1-.8.8a3.5 3.5 0 0 1-1.7-1.7l.8-.8-1-2z"/>',
+  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   empty: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 13h5l1.5 3h5L16 13h5"/>',
 };
 const ico = (n, s = 18) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n]}</svg>`;
@@ -148,11 +149,12 @@ const VIEWS = {
   derivaciones: { t: 'Derivados', s: 'Coordinación, mediaciones y audiencias', i: 'hand' },
   buzon: { t: 'Buzón', s: 'Propuestas «Tu norma, tu ciudad»', i: 'mail' },
   ordenanzas: { t: 'Ordenanzas', s: 'Qué ordenanzas consultan los vecinos', i: 'scroll' },
+  auditoria: { t: 'Auditoría', s: 'Cómo responde el Asistente y qué se le pregunta', i: 'eye' },
   marca: { t: 'Manual de marca', s: 'Identidad visual del Concejo Deliberante', i: 'palette' },
 };
 function buildNav() {
   $('#nav').innerHTML = Object.entries(VIEWS).map(([k, v]) => `<a href="#/${k}" data-v="${k}">${ico(v.i, 20)}<span>${esc(v.t)}</span><em class="badge" data-b="${k}" hidden></em></a>`).join('');
-  const short = { derivaciones: 'Derivados', ordenanzas: 'Ordenanz.', marca: 'Marca' };
+  const short = { derivaciones: 'Derivados', ordenanzas: 'Ordenanz.', auditoria: 'Auditoría', marca: 'Marca' };
   $('#tabbar').innerHTML = Object.keys(VIEWS).map((k) => `<a href="#/${k}" data-v="${k}">${ico(VIEWS[k].i, 22)}<span>${esc(short[k] || VIEWS[k].t)}</span><em class="badge" data-b="${k}" hidden></em></a>`).join('');
   $('#refreshBtn').innerHTML = ico('refresh', 20); $('#logoutBtn').innerHTML = ico('out', 19);
 }
@@ -210,7 +212,7 @@ async function render(silent) {
   const my = ++S.seq, v = $('#view');
   if (!silent) { destroyCharts(); v.innerHTML = skel(); }
   try {
-    const html = await ({ resumen: vResumen, vecinos: vVecinos, derivaciones: vDeriv, buzon: vBuzon, ordenanzas: vOrds, marca: vMarca }[S.view])(my);
+    const html = await ({ resumen: vResumen, vecinos: vVecinos, derivaciones: vDeriv, buzon: vBuzon, ordenanzas: vOrds, auditoria: vAudit, marca: vMarca }[S.view])(my);
     if (my !== S.seq) return;
     banner('');
     if (html === null) return;
@@ -362,6 +364,41 @@ async function vOrds() {
   <section class="card"><h2>Consultas recientes</h2><p class="sub">Lo último que pidió cada vecino por número</p><div class="scroll-x"><table class="t"><thead><tr><th>Cuándo</th><th>Ordenanza</th><th>Vecino</th><th></th></tr></thead><tbody>${rc}</tbody></table></div></section></div>`
     : `<div class="empty">${ico('empty', 40)}Nadie consultó una ordenanza por número ${esc(enPeriodo())}.</div>`}
   <p class="note">Se registra cuando el vecino pide una ordenanza por su número. Las búsquedas por tema no se cuentan acá.</p>`;
+}
+
+
+/* ---------- Auditoría ---------- */
+async function vAudit() {
+  const [d, st] = await Promise.all([api('audit', per()), S.meses ? null : api('stats', per())]);
+  if (st) { S.meses = st.meses; S.pruebasOcultas = Number(st.pruebas_ocultas) || 0; }
+  after = () => { /* los detalles de concejales son <details>, sin JS */ };
+  const pct = (n, t) => (t ? Math.round((n / t) * 1000) / 10 : 0).toString().replace('.', ',') + ' %';
+  const nConc = (d.temas.find((t) => t.label === 'Concejales y autoridades') || { n: 0 }).n;
+  const conc = d.concejales.map((c, i) => `<details class="ej"><summary><span class="pos">${i + 1}</span><b>${esc(c.nombre)}</b><span class="tag">${esc(c.bloque || '')}</span><span class="cnt">${num(c.n)} preguntas · ${num(c.vecinos)} vecinos</span></summary>
+    <ul>${(c.ejemplos || []).map((e) => `<li>${esc(e)}</li>`).join('')}</ul></details>`).join('');
+  const rep = d.repetidas.map((r) => `<tr><td>${esc(r.pregunta)}</td><td class="n">${num(r.n)}</td><td class="n">${num(r.vecinos)}</td><td>${esc(r.respuesta || '')}</td></tr>`).join('');
+  const sin = d.sin_respuesta.map((r) => `<article class="qa"><p class="q"><b>Vecino</b>${esc(r.pregunta)}</p><p class="a"><b>Asistente</b>${esc(r.respuesta)}</p><small>${esc(rel(r.created_at))}</small></article>`).join('');
+  const mm = d.meses.map((m) => `<tr><td><b>${esc(cap(mesNombre(m.mes)))}</b></td><td class="n">${num(m.vecinos)}</td><td class="n">${num(m.mensajes)}</td><td class="n">${num(m.ordenanzas)}</td><td class="n">${num(m.concejales)}</td><td class="n">${pct(m.no_supo, m.mensajes)}</td></tr>`).join('');
+  const kp = (n, l, cls) => `<div class="kpi ${cls || ''}"><b>${n}</b><span>${esc(l)}</span></div>`;
+  if (!Number(d.mensajes)) return `${periodBar()}<section class="card"><div class="empty">${ico('empty', 44)}No hay consultas ${esc(enPeriodo())}${S.pruebas ? '' : ' de vecinos (las pruebas del equipo están ocultas)'}.</div></section>`;
+  return `${periodBar()}
+  <div class="kpis">
+    ${kp(num(d.mensajes), 'Mensajes ' + enPeriodo())}
+    ${kp(num(d.vecinos), 'Vecinos distintos')}
+    ${kp(num(nConc), 'Preguntas sobre concejales')}
+    ${kp(pct(d.no_supo, d.mensajes), 'Respuestas «no tengo la información»', Number(d.no_supo) ? 'alert' : '')}
+  </div>
+  <div class="grid3">
+    <section class="card"><h2>Qué preguntan más</h2><p class="sub">Tema de cada mensaje de los vecinos ${esc(enPeriodo())}</p>${barsHTML(d.temas, 'n', 12)}</section>
+    <section class="card"><h2>Qué responde más el Asistente</h2><p class="sub">Tipo de respuesta ${esc(enPeriodo())}</p>${barsHTML(d.respuestas, 'n', 12)}</section>
+  </div>
+  <section class="card" style="margin-bottom:14px"><h2>Concejales más consultados</h2><p class="sub">Veces que los vecinos nombraron a cada concejal (por apellido). Tocá uno para ver qué preguntaron.</p>${conc || '<div class="empty">Nadie nombró a un concejal en este período.</div>'}</section>
+  <div class="grid3">
+    <section class="card"><h2>Preguntas que se repiten</h2><p class="sub">Mismo texto, 2 veces o más</p>${rep ? `<div class="scroll-x"><table class="t"><thead><tr><th>Pregunta</th><th class="n">Veces</th><th class="n">Vecinos</th><th>Cómo respondió</th></tr></thead><tbody>${rep}</tbody></table></div>` : '<div class="empty">No hay preguntas repetidas.</div>'}</section>
+    <section class="card"><h2>Lo que no supo responder</h2><p class="sub">Respuestas donde dijo que no tiene la información. Son las que conviene cargar o revisar.</p>${sin || '<div class="empty">No hubo respuestas de este tipo.</div>'}</section>
+  </div>
+  <section class="card"><h2>Mes a mes</h2><p class="sub">Todos los meses, sin importar el filtro</p><div class="scroll-x"><table class="t"><thead><tr><th>Mes</th><th class="n">Vecinos</th><th class="n">Mensajes</th><th class="n">Ordenanzas</th><th class="n">Concejales</th><th class="n">Sin información</th></tr></thead><tbody>${mm}</tbody></table></div></section>
+  <p class="note">Los temas y tipos de respuesta se clasifican automáticamente por palabras clave: sirven de guía, no son un dato exacto. «Otras» agrupa lo que no encaja en ninguna categoría.</p>`;
 }
 
 /* ---------- Manual de marca ---------- */

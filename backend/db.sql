@@ -33,7 +33,7 @@ SELECT c.telefono,
   NULLIF(v.barrio,'') AS barrio,
   COALESCE(k.atencion,'no_atendido') AS atencion, k.atendido_por, k.atendido_at,
   c.msgs, c.adjuntos, c.primero, c.ultimo, COALESCE(c.tema,'Otras consultas') AS tema,
-  (c.telefono ~ '^549000') AS es_prueba,
+  (c.telefono ~ '^(549000|5493883299927$)') AS es_prueba,
   COALESCE(d.n,0)::int AS derivs, d.ult_deriv, d.motivo,
   COALESCE(p.n,0)::int AS propuestas, COALESCE(m.n,0)::int AS mediaciones, COALESCE(o.n,0)::int AS ordenanzas
 FROM (

@@ -282,3 +282,17 @@ table.t td.n, table.t th.n { text-align: right; font-variant-numeric: tabular-nu
   .intro-card { padding: 26px 20px 20px; }
 }
 @media (max-width: 960px) and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tabbar a[aria-current="page"] { color: var(--sky-2); } }
+
+/* ---------- auditoría ---------- */
+details.ej { border-bottom: 1px solid var(--line); }
+details.ej summary { display: flex; align-items: center; gap: 10px; padding: 11px 2px; cursor: pointer; list-style: none; min-height: 46px; flex-wrap: wrap; }
+details.ej summary::-webkit-details-marker { display: none; }
+details.ej .pos { width: 26px; height: 26px; border-radius: 50%; background: var(--sky); color: #082a33; display: inline-grid; place-items: center; font-size: 12px; font-weight: 700; flex: none; }
+details.ej .cnt { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+details.ej ul { margin: 0 0 12px 36px; padding-left: 16px; display: grid; gap: 4px; font-size: 14px; color: var(--ink); }
+.qa { border-left: 3px solid var(--sky); padding: 8px 12px; margin-bottom: 10px; background: var(--surface-2); border-radius: 0 10px 10px 0; display: grid; gap: 4px; }
+.qa p { font-size: 13.5px; overflow-wrap: anywhere; }
+.qa p b { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.qa small { color: var(--muted); font-size: 12px; }
+.tabbar.seven { grid-template-columns: repeat(7, 1fr); }
+@media (max-width: 960px) { .tabbar { grid-template-columns: repeat(7, 1fr); } .tabbar a { font-size: 10px; } }
