@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#75aadb">
+<title>CRM Concejo Deliberante</title>
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="apple-touch-icon" href="assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="intro" id="intro" hidden>
+  <section class="intro-card" aria-label="Ingresar al CRM del Concejo Deliberante">
+    <img class="intro-mark" src="assets/isotipo.svg" alt="" width="76" height="76">
+    <p class="intro-kicker">Concejo Deliberante</p>
+    <h1>San Salvador de Jujuy</h1>
+    <p class="intro-sub">CRM del Asistente Virtual</p>
+    <form id="loginForm" novalidate>
+      <label class="sr" for="lgUser">Usuario</label>
+      <input id="lgUser" name="username" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      <label class="sr" for="lgPass">Contraseña</label>
+      <div class="pass"><input id="lgPass" name="password" type="password" placeholder="Contraseña" autocomplete="current-password" required><button type="button" id="lgShow" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button></div>
+      <p class="lg-err" id="lgErr" role="alert"></p>
+      <button class="btn primary lg-btn" type="submit" id="lgBtn">Entrar</button>
+    </form>
+    <p class="intro-foot">Uso interno · Consultora RZ &amp; Asociados</p>
+  </section>
+</div>
+
+<div class="app" id="appRoot">
+  <aside class="side">
+    <a class="brand" href="#/resumen" aria-label="CRM Concejo Deliberante"><img src="assets/isotipo.svg" alt="" width="40" height="40"><span><b>Concejo Deliberante</b><small>San Salvador de Jujuy</small></span></a>
+    <nav class="nav" id="nav" aria-label="Secciones"></nav>
+    <div class="side-foot">
+      <button class="chip-op" id="opBtn" type="button" title="Quién está operando el CRM"></button>
+      <button class="theme-btn" id="themeBtn" type="button" aria-label="Cambiar tema claro/oscuro"></button>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button class="menu-op" id="opBtnM" type="button"></button>
+      <div class="top-title"><h1 id="pageTitle">Resumen</h1><p id="pageSub"></p></div>
+      <div class="top-right">
+        <span class="live" id="live" title="Los datos se actualizan solos cada minuto"><i></i><span id="liveTxt">En vivo</span></span>
+        <button class="icon-btn" id="refreshBtn" type="button" aria-label="Actualizar ahora"></button>
+        <button class="icon-btn only-m" id="themeBtnM" type="button" aria-label="Cambiar tema"></button>
+        <button class="icon-btn" id="logoutBtn" type="button" aria-label="Cerrar sesión" title="Cerrar sesión"></button>
+      </div>
+    </header>
+    <div class="gold-line" aria-hidden="true"></div>
+    <div id="banner" class="banner" hidden></div>
+    <main id="view" class="view" tabindex="-1"></main>
+  </div>
+</div>
+<nav class="tabbar" id="tabbar" aria-label="Secciones"></nav>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="Detalle del vecino"></aside>
+<div class="op-pop" id="opPop" role="group" aria-label="Tu nombre" hidden>
+  <form id="opForm">
+    <label for="opInput"><b>¿Quién está atendiendo?</b><span>Tu nombre queda en cada vecino que marques, para que el equipo sepa quién lo tomó.</span></label>
+    <input id="opInput" type="text" maxlength="40" placeholder="Ej: Alejandro, Coordinación" autocomplete="given-name" required>
+    <div class="pop-actions"><button type="button" class="btn ghost sm" id="opCancel">Ahora no</button><button class="btn primary sm" type="submit">Guardar nombre</button></div>
+  </form>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
