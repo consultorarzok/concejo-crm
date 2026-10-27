@@ -285,14 +285,14 @@ async function vResumen() {
 function rowHTML(r) {
   const tags = [];
   if (r.atencion !== 'no_atendido') tags.push(`<span class="tag ${ATEN_CLS[r.atencion]}">${ATEN[r.atencion]}</span>`);
-  if (r.volvio) tags.push('<span class="tag no">Volvió a escribir</span>');
+  if (r.volvio) tags.push(`<span class="tag no">${esc(r.pend_motivo || 'Pendiente')}</span>`);
   if (r.derivs) tags.push('<span class="tag gold">Derivado</span>');
   if (r.propuestas) tags.push('<span class="tag gold">Propuesta</span>');
   if (r.mediaciones) tags.push('<span class="tag gold">Mediación</span>');
   if (r.es_prueba) tags.push('<span class="tag test">Prueba</span>');
   return `<button class="row" type="button" data-tel="${esc(r.telefono)}"><span class="ava h${hue(r.telefono)}">${esc(initials(r))}</span>
     <span style="min-width:0"><span class="nm">${esc(r.nombre || 'Sin nombre')} <span class="ph">${esc(phoneFmt(r.telefono))}</span>${tags.join('')}</span>
-    <span class="lm" style="display:block">${esc(r.ultimo_msg || '')}</span></span>
+    <span class="lm" style="display:block">${esc(r.volvio && r.pend_msg ? r.pend_msg : (r.ultimo_msg || ''))}</span></span>
     <span class="rt"><span>${esc(rel(r.ultimo))}</span><span>${num(r.msgs)} msj</span><span>${esc(r.tema || '')}</span></span></button>`;
 }
 const FILTROS = [['todos', 'Todos'], ['no_atendido', 'Sin atender'], ['seguimiento', 'En seguimiento'], ['atendido', 'Atendidos'], ['derivado', 'Derivados'], ['propuesta', 'Propuestas'], ['mediacion', 'Mediaciones'], ['ordenanza', 'Ordenanzas']];
@@ -441,7 +441,8 @@ function headHTML(r) {
   return `<div class="dr-h"><div class="dr-top"><span class="ava h${hue(r.telefono)}">${esc(initials(r))}</span><div style="flex:1;min-width:0"><h2>${esc(r.nombre || 'Sin nombre')}</h2><small>${esc(phoneFmt(r.telefono))}${r.barrio ? ' · B.º ' + esc(r.barrio) : ''}${r.es_prueba ? ' · número de prueba' : ''}</small></div><button class="icon-btn" id="drClose" type="button" aria-label="Cerrar">${ico('x', 20)}</button></div>
   <div class="seg3" role="group" aria-label="Estado de atención">${Object.entries(ATEN).map(([k, l]) => `<button type="button" data-a="${k}" aria-pressed="${r.atencion === k}">${l}</button>`).join('')}</div>
   <div class="dr-actions"><a class="btn sm" href="${wa}" target="_blank" rel="noopener">${ico('wa', 16)} Abrir WhatsApp</a><button class="btn sm" id="drEdit" type="button">Editar nombre</button></div>
-  ${r.atendido_por && r.atencion !== 'no_atendido' ? `<small style="color:#b6c4d6">${ATEN[r.atencion]} por ${esc(r.atendido_por)} · ${esc(rel(r.atendido_at))}</small>` : ''}</div>
+  ${r.atendido_por && r.atencion !== 'no_atendido' ? `<small style="color:#b6c4d6">${ATEN[r.atencion]} por ${esc(r.atendido_por)} · ${esc(rel(r.atendido_at))}</small>` : ''}
+  ${r.volvio ? `<small style="color:#b6c4d6">${esc(r.pend_motivo || 'Pendiente')} · ${esc(rel(r.pend_at))}${r.pend_msg ? ` — «${esc(r.pend_msg.slice(0, 140))}»` : ''}</small>` : ''}</div>
   <div class="dr-tabs" role="tablist"><button role="tab" data-t="chat" aria-selected="true">Conversación</button><button role="tab" data-t="notas" aria-selected="false">Notas</button><button role="tab" data-t="reg" aria-selected="false">Registros</button></div>`;
 }
 function bindHead(dr) {
