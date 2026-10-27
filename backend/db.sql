@@ -31,11 +31,13 @@ CREATE OR REPLACE VIEW concejo_crm_v AS
 SELECT c.telefono,
   COALESCE(NULLIF(k.nombre,''), NULLIF(v.nombre,''), d.nombre_der) AS nombre,
   NULLIF(v.barrio,'') AS barrio,
-  COALESCE(k.atencion,'no_atendido') AS atencion, k.atendido_por, k.atendido_at,
+  -- 27/10/2026: si lo marcaron Atendido y volvio a escribir despues, vuelve a "Sin atender".
+  CASE WHEN k.atencion = 'atendido' AND c.ultimo > k.atendido_at THEN 'no_atendido' ELSE COALESCE(k.atencion,'no_atendido') END AS atencion, k.atendido_por, k.atendido_at,
   c.msgs, c.adjuntos, c.primero, c.ultimo, COALESCE(c.tema,'Otras consultas') AS tema,
   (c.telefono ~ '^(549000|5493883299927$)') AS es_prueba,
   COALESCE(d.n,0)::int AS derivs, d.ult_deriv, d.motivo,
-  COALESCE(p.n,0)::int AS propuestas, COALESCE(m.n,0)::int AS mediaciones, COALESCE(o.n,0)::int AS ordenanzas
+  COALESCE(p.n,0)::int AS propuestas, COALESCE(m.n,0)::int AS mediaciones, COALESCE(o.n,0)::int AS ordenanzas,
+  (k.atencion = 'atendido' AND c.ultimo > k.atendido_at) AS volvio
 FROM (
   SELECT telefono, count(*) AS msgs, count(*) FILTER (WHERE tipo_mensaje <> 'text') AS adjuntos,
     min(created_at) AS primero, max(created_at) AS ultimo,

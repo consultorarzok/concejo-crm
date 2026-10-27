@@ -42,7 +42,7 @@ SELECT json_build_object(
  'total', (SELECT count(*) FROM f),
  'counts', (SELECT json_build_object('todos', count(*), 'no_atendido', count(*) FILTER (WHERE atencion = 'no_atendido'), 'seguimiento', count(*) FILTER (WHERE atencion = 'seguimiento'), 'atendido', count(*) FILTER (WHERE atencion = 'atendido'), 'derivado', count(*) FILTER (WHERE derivs > 0), 'propuesta', count(*) FILTER (WHERE propuestas > 0), 'mediacion', count(*) FILTER (WHERE mediaciones > 0), 'ordenanza', count(*) FILTER (WHERE ordenanzas > 0)) FROM a0),
  'rows', (SELECT COALESCE(json_agg(t), '[]'::json) FROM (
-   SELECT f.telefono, f.nombre, f.barrio, f.atencion, f.atendido_por, f.atendido_at, f.tema, f.msgs, f.adjuntos, f.primero, f.ultimo, f.derivs, f.propuestas, f.mediaciones, f.ordenanzas, f.es_prueba,
+   SELECT f.telefono, f.nombre, f.barrio, f.atencion, f.atendido_por, f.atendido_at, f.tema, f.msgs, f.adjuntos, f.primero, f.ultimo, f.derivs, f.propuestas, f.mediaciones, f.ordenanzas, f.es_prueba, f.volvio,
      (SELECT left(CASE WHEN x.tipo_mensaje IN ('text', 'audio') THEN COALESCE(NULLIF(x.mensaje_usuario, ''), '[' || x.tipo_mensaje || ']') ELSE '[' || x.tipo_mensaje || ']' END, 110) FROM concejo_conversaciones x WHERE x.telefono = f.telefono ORDER BY x.id DESC LIMIT 1) AS ultimo_msg
    FROM f ORDER BY CASE WHEN $3 = 'antiguos' THEN f.ultimo END ASC, CASE WHEN $3 <> 'antiguos' THEN f.ultimo END DESC LIMIT $4 OFFSET $5) t)
 ) AS data`,
@@ -63,7 +63,7 @@ SELECT json_build_object(
    nombre = CASE WHEN $5::boolean THEN NULLIF($2, '') ELSE o.nombre END,
    atencion = CASE WHEN $6::boolean THEN $3 ELSE o.atencion END,
    atendido_por = CASE WHEN NOT $6::boolean THEN o.atendido_por WHEN $3 = 'no_atendido' THEN NULL ELSE COALESCE(NULLIF($4, ''), o.atendido_por) END,
-   atendido_at = CASE WHEN NOT $6::boolean THEN o.atendido_at WHEN $3 = 'no_atendido' THEN NULL WHEN o.atencion IS DISTINCT FROM $3 THEN now() ELSE o.atendido_at END,
+   atendido_at = CASE WHEN NOT $6::boolean THEN o.atendido_at WHEN $3 = 'no_atendido' THEN NULL WHEN o.atencion IS DISTINCT FROM $3 OR $3 = 'atendido' THEN now() ELSE o.atendido_at END,
    updated_at = now()
  RETURNING o.telefono, o.nombre, o.atencion, o.atendido_por, o.atendido_at)
 SELECT row_to_json(r) AS data FROM r`,
@@ -76,7 +76,7 @@ SELECT row_to_json(r) AS data FROM r`,
  UNION ALL
  SELECT 'audiencia', g.id, g.telefono, NULLIF(g.nombre, ''), NULL, g.concejal_o_area || COALESCE(' · ' || g.fecha_solicitada, ''), 'Audiencia: ' || COALESCE(g.tipo, ''), CASE WHEN g.fecha_registro ~ '^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}' THEN g.fecha_registro::timestamp AT TIME ZONE 'America/Argentina/Jujuy' END FROM concejo_agendamientos g)
 SELECT COALESCE(json_agg(t), '[]'::json) AS data FROM (
- SELECT u.tipo, u.id, u.telefono, COALESCE(NULLIF(k.nombre, ''), u.nombre) AS nombre, u.barrio, u.detalle, u.motivo, u.cuando, COALESCE(k.atencion, 'no_atendido') AS atencion, (u.telefono ~ '^(549000|5493883299927$)') AS es_prueba
+ SELECT u.tipo, u.id, u.telefono, COALESCE(NULLIF(k.nombre, ''), u.nombre) AS nombre, u.barrio, u.detalle, u.motivo, u.cuando, CASE WHEN k.atencion = 'atendido' AND u.cuando > k.atendido_at THEN 'no_atendido' ELSE COALESCE(k.atencion, 'no_atendido') END AS atencion, (u.telefono ~ '^(549000|5493883299927$)') AS es_prueba
  FROM u LEFT JOIN concejo_crm_contactos k ON k.telefono = u.telefono
  WHERE ($4::boolean OR u.telefono !~ '^(549000|5493883299927$)') AND ($1 = '' OR (u.cuando >= $2::timestamptz AND u.cuando < $3::timestamptz)) ORDER BY u.cuando DESC NULLS LAST LIMIT 1000) t`,
   buzon: `SELECT COALESCE(json_agg(t), '[]'::json) AS data FROM (

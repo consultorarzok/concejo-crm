@@ -27,7 +27,8 @@ function rel(iso) {
   if (dayKey(d) === dayKey(now)) return `hoy ${hhmm(d)}`;
   if (dayKey(d) === dayKey(new Date(now - 864e5))) return `ayer ${hhmm(d)}`;
   if (min < 7 * 1440) return `${fmt(d, { weekday: 'short' }).replace('.', '')} ${hhmm(d)}`;
-  return fmt(d, { day: 'numeric', month: 'short' }).replace('.', '');
+  const anio = d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {};
+  return `${fmt(d, { day: 'numeric', month: 'short', ...anio }).replace('.', '')} ${hhmm(d)}`;
 }
 const longDate = (iso) => { const d = new Date(iso); return `${fmt(d, { day: 'numeric', month: 'long', year: 'numeric' })}, ${hhmm(d)}`; };
 function dayLabel(iso) {
@@ -284,6 +285,7 @@ async function vResumen() {
 function rowHTML(r) {
   const tags = [];
   if (r.atencion !== 'no_atendido') tags.push(`<span class="tag ${ATEN_CLS[r.atencion]}">${ATEN[r.atencion]}</span>`);
+  if (r.volvio) tags.push('<span class="tag no">Volvió a escribir</span>');
   if (r.derivs) tags.push('<span class="tag gold">Derivado</span>');
   if (r.propuestas) tags.push('<span class="tag gold">Propuesta</span>');
   if (r.mediaciones) tags.push('<span class="tag gold">Mediación</span>');
